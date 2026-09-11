@@ -15,5 +15,5 @@ app.use('/api/admin', adminRoutes); // Mounts /api/admin/users, /api/admin/users
 // Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://127.0.0.1:${PORT}`);
+  console.log(`Server running on https://react-a5f8.onrender.com`);
 });

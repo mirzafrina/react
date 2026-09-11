@@ -4,17 +4,24 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const app = express();
-const PORT = 5000;
-const JWT_SECRET = 'your-secret-key-wealth-tracker';
 
-app.use(cors());
+// Use Render's dynamic PORT or default to 5000 locally
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-wealth-tracker';
+
+// CORS Middleware Configuration
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 // Models
 interface User {
   id: string;
   email: string;
-  plainPassword?: string; // Saved so admin can view user passwords
   passwordHash: string;
   role: 'admin' | 'user';
 }
@@ -41,7 +48,6 @@ const seedAdmin = async () => {
     users.push({
       id: 'admin-id-1',
       email: adminEmail,
-      plainPassword: 'admin123',
       passwordHash,
       role: 'admin',
     });
@@ -70,10 +76,18 @@ const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) 
   });
 };
 
-// Admin Protection Guard Middleware
+// Admin Guard Middleware
 const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (req.userRole !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// Prevent Self-Action Middleware
+const preventSelfAction = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.params.id === req.userId) {
+    return res.status(400).json({ error: 'Admins cannot modify or delete their own admin account' });
   }
   next();
 };
@@ -84,7 +98,7 @@ const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password || password.length < 6) {
-    return res.status(400).json({ error: 'Valid email and password (min 6 chars) are required' });
+    return res.status(400).json({ error: 'Valid email and password (min 6 chars) required' });
   }
 
   if (users.find((u) => u.email === email)) {
@@ -95,7 +109,6 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
   const newUser: User = {
     id: Date.now().toString(),
     email,
-    plainPassword: password, // Retained for Admin view
     passwordHash,
     role: 'user',
   };
@@ -139,7 +152,7 @@ app.get('/api/transactions', authenticateToken, (req: AuthRequest, res: Response
   res.json(userTxs);
 });
 
-// Add Income or Expense
+// Add Transaction
 app.post('/api/transactions', authenticateToken, (req: AuthRequest, res: Response) => {
   const { title, amount, type, category, date } = req.body;
 
@@ -161,7 +174,7 @@ app.post('/api/transactions', authenticateToken, (req: AuthRequest, res: Respons
   res.status(201).json(newTx);
 });
 
-// Get Aggregate Financial Summary
+// Get Summary
 app.get('/api/summary', authenticateToken, (req: AuthRequest, res: Response) => {
   const targetTxs = req.userRole === 'admin'
     ? transactions
@@ -184,7 +197,7 @@ app.get('/api/summary', authenticateToken, (req: AuthRequest, res: Response) => 
 
 // ---------------- ADMIN ENDPOINTS ----------------
 
-// Get All Users (Email, Plain Password, Total Income, Total Expense)
+// Get All Users
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req: AuthRequest, res: Response) => {
   const safeUsers = users.map((u) => {
     const userTxs = transactions.filter((t) => t.userId === u.id);
@@ -200,7 +213,7 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req: AuthRequest, 
     return {
       id: u.id,
       email: u.email,
-      password: u.plainPassword || '[DELETED / NO ACCESS]',
+      role: u.role,
       totalIncome,
       totalExpense,
     };
@@ -209,8 +222,8 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req: AuthRequest, 
   res.json(safeUsers);
 });
 
-// Update or Clear User Password
-app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response) => {
+// Update User Password
+app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, preventSelfAction, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { password } = req.body;
 
@@ -218,18 +231,15 @@ app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, async 
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   if (!password || password.trim() === '') {
-    user.plainPassword = '[DELETED / NO ACCESS]';
-    user.passwordHash = '';
-  } else {
-    user.plainPassword = password;
-    user.passwordHash = await bcrypt.hash(password, 10);
+    return res.status(400).json({ error: 'Password cannot be empty' });
   }
 
+  user.passwordHash = await bcrypt.hash(password, 10);
   res.json({ message: 'Password updated successfully' });
 });
 
-// Delete User & Wipe Their Transactions
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Response) => {
+// Delete User
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, preventSelfAction, (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const index = users.findIndex((u) => u.id === id);
 
@@ -237,7 +247,6 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req: AuthRe
 
   users.splice(index, 1);
 
-  // Remove associated user transactions
   for (let i = transactions.length - 1; i >= 0; i--) {
     if (transactions[i].userId === id) {
       transactions.splice(i, 1);
@@ -247,7 +256,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req: AuthRe
   res.json({ success: true });
 });
 
-// Server Listen
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Bind to 0.0.0.0 for Render host binding compatibility
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
 });

@@ -3,9 +3,15 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 const app = express();
-const PORT = 5000;
-const JWT_SECRET = 'your-secret-key-wealth-tracker';
-app.use(cors());
+// Use Render's dynamic PORT or default to 5000 locally
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-wealth-tracker';
+// CORS Middleware Configuration
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 // In-Memory Database Arrays
 const users = [];
@@ -18,7 +24,6 @@ const seedAdmin = async () => {
         users.push({
             id: 'admin-id-1',
             email: adminEmail,
-            plainPassword: 'admin123',
             passwordHash,
             role: 'admin',
         });
@@ -40,10 +45,17 @@ const authenticateToken = (req, res, next) => {
         next();
     });
 };
-// Admin Protection Guard Middleware
+// Admin Guard Middleware
 const requireAdmin = (req, res, next) => {
     if (req.userRole !== 'admin') {
         return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+};
+// Prevent Self-Action Middleware
+const preventSelfAction = (req, res, next) => {
+    if (req.params.id === req.userId) {
+        return res.status(400).json({ error: 'Admins cannot modify or delete their own admin account' });
     }
     next();
 };
@@ -52,7 +64,7 @@ const requireAdmin = (req, res, next) => {
 app.post('/api/auth/register', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password || password.length < 6) {
-        return res.status(400).json({ error: 'Valid email and password (min 6 chars) are required' });
+        return res.status(400).json({ error: 'Valid email and password (min 6 chars) required' });
     }
     if (users.find((u) => u.email === email)) {
         return res.status(400).json({ error: 'Email already registered' });
@@ -61,7 +73,6 @@ app.post('/api/auth/register', async (req, res) => {
     const newUser = {
         id: Date.now().toString(),
         email,
-        plainPassword: password, // Retained for Admin view
         passwordHash,
         role: 'user',
     };
@@ -90,7 +101,7 @@ app.get('/api/transactions', authenticateToken, (req, res) => {
     const userTxs = transactions.filter((t) => t.userId === req.userId);
     res.json(userTxs);
 });
-// Add Income or Expense
+// Add Transaction
 app.post('/api/transactions', authenticateToken, (req, res) => {
     const { title, amount, type, category, date } = req.body;
     if (!title || !amount || !type || !category) {
@@ -108,7 +119,7 @@ app.post('/api/transactions', authenticateToken, (req, res) => {
     transactions.push(newTx);
     res.status(201).json(newTx);
 });
-// Get Aggregate Financial Summary
+// Get Summary
 app.get('/api/summary', authenticateToken, (req, res) => {
     const targetTxs = req.userRole === 'admin'
         ? transactions
@@ -126,7 +137,7 @@ app.get('/api/summary', authenticateToken, (req, res) => {
     });
 });
 // ---------------- ADMIN ENDPOINTS ----------------
-// Get All Users (Email, Plain Password, Total Income, Total Expense)
+// Get All Users
 app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
     const safeUsers = users.map((u) => {
         const userTxs = transactions.filter((t) => t.userId === u.id);
@@ -139,38 +150,33 @@ app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
         return {
             id: u.id,
             email: u.email,
-            password: u.plainPassword || '[DELETED / NO ACCESS]',
+            role: u.role,
             totalIncome,
             totalExpense,
         };
     });
     res.json(safeUsers);
 });
-// Update or Clear User Password
-app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, async (req, res) => {
+// Update User Password
+app.put('/api/admin/users/:id/password', authenticateToken, requireAdmin, preventSelfAction, async (req, res) => {
     const { id } = req.params;
     const { password } = req.body;
     const user = users.find((u) => u.id === id);
     if (!user)
         return res.status(404).json({ error: 'User not found' });
     if (!password || password.trim() === '') {
-        user.plainPassword = '[DELETED / NO ACCESS]';
-        user.passwordHash = '';
+        return res.status(400).json({ error: 'Password cannot be empty' });
     }
-    else {
-        user.plainPassword = password;
-        user.passwordHash = await bcrypt.hash(password, 10);
-    }
+    user.passwordHash = await bcrypt.hash(password, 10);
     res.json({ message: 'Password updated successfully' });
 });
-// Delete User & Wipe Their Transactions
-app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+// Delete User
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, preventSelfAction, (req, res) => {
     const { id } = req.params;
     const index = users.findIndex((u) => u.id === id);
     if (index === -1)
         return res.status(404).json({ error: 'User not found' });
     users.splice(index, 1);
-    // Remove associated user transactions
     for (let i = transactions.length - 1; i >= 0; i--) {
         if (transactions[i].userId === id) {
             transactions.splice(i, 1);
@@ -178,7 +184,7 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) =
     }
     res.json({ success: true });
 });
-// Server Listen
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+// Bind to 0.0.0.0 for Render host binding compatibility
+app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
 });
