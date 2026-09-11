@@ -3,7 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const app = express();s
+const app = express();
 const PORT = 5000;
 const JWT_SECRET = 'your-secret-key-wealth-tracker';
 
