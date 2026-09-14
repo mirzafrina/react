@@ -20,7 +20,7 @@ interface Transaction {
   date: string;
 }
 
-const API_BASE = 'https://react-a5f8.onrender.com/';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://react-a5f8.onrender.com';
 
 const CATEGORY_COLORS: Record<string, string> = {
   Salary: '#10b981',

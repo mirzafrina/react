@@ -14,7 +14,7 @@ interface AdminPageProps {
   onLogout: () => void;
 }
 
-const API_BASE = 'https://react-a5f8.onrender.com/';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://react-a5f8.onrender.com';
 
 export default function AdminPage({ token, userEmail, onLogout }: AdminPageProps) {
   const [users, setUsers] = useState<UserData[]>([]);

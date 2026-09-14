@@ -31,7 +31,7 @@ interface BudgetTrackerProps {
   onLogout: () => void;
 }
 
-const API_BASE = 'https://react-a5f8.onrender.com/';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://react-a5f8.onrender.com';
 
 export default function BudgetTracker({ token, user, onLogout }: BudgetTrackerProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
