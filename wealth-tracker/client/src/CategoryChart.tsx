@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface Transaction {
   id: string;
   userId: string;
