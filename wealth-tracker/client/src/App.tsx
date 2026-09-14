@@ -20,7 +20,7 @@ interface Transaction {
   date: string;
 }
 
-const API_BASE = 'http://127.0.0.1:5000';
+const API_BASE = 'https://react-a5f8.onrender.com/';
 
 const CATEGORY_COLORS: Record<string, string> = {
   Salary: '#10b981',

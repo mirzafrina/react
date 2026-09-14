@@ -21,7 +21,7 @@ export default function AdminPanel({ token }: AdminPanelProps) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/users', {
+      const res = await fetch('https://react-a5f8.onrender.com/api/admin/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -41,7 +41,7 @@ export default function AdminPanel({ token }: AdminPanelProps) {
 
   const handleSavePassword = async (userId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}/password`, {
+      const res = await fetch(`https://react-a5f8.onrender.com/api/admin/users/${userId}/password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export default function AdminPanel({ token }: AdminPanelProps) {
   const handleDeletePassword = async (userId: string) => {
     if (!confirm('Clear this user password?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}/password`, {
+      const res = await fetch(`https://react-a5f8.onrender.com/api/admin/users/${userId}/password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +80,7 @@ export default function AdminPanel({ token }: AdminPanelProps) {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm('Delete user and all associated records?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+      const res = await fetch(`https://react-a5f8.onrender.com/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
